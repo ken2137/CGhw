@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+<style>
+#info {
+  position: absolute;
+  top: 0px;
+  width: 100%;
+  padding: 10px;
+  text-align: center;
+  color: #ffff00
+}
+
+body {
+  overflow: hidden;
+}
+</style>
+</head>
+
+
+<body> 
+<div id="info">HW2
+</div>
+<script src="https://threejs.org/build/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js">
+</script>
+<script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+
+<script>
+var camera, camera3, scene, renderer, mesh, light;
+var keyboard = new KeyboardState();
+var clock;
+
+var tank, cube;
+var tower1, tower2, tower2;
+var fbump, bbump;
+var pos = new THREE.Vector3();
+var vel = new THREE.Vector3();
+var force = new THREE.Vector3();
+var power, angle;
+
+
+(function() {
+  Math.clamp = function(val, min, max) {
+    return Math.min(Math.max(val, min), max);
+
+  }
+})();
+
+init();
+animate();
+
+function buildVehicle() {
+  const cygeometry = new THREE.CylinderGeometry(3.5, 4, 5, 32);
+  const material = new THREE.MeshPhongMaterial({
+    color: 0x006400
+  });
+  const cylinder = new THREE.Mesh(cygeometry, material);
+  cylinder.position.y = 7.5;
+  cylinder.position.x = -3;
+
+
+
+  const cygeometry2 = new THREE.CylinderGeometry(1, 1, 10, 32);
+  const cylinder2 = new THREE.Mesh(cygeometry2, material);
+  cylinder2.rotation.z = Math.PI / 2;
+  cylinder2.position.y = 7.5;
+  cylinder2.position.x = 3;
+
+
+  const geometry = new THREE.BoxGeometry(20, 5, 10);
+  const cube = new THREE.Mesh(geometry, material);
+  cube.position.y = 2.5;
+
+
+
+  group = new THREE.Group();
+  group.add(cube);
+  group.add(cylinder);
+  group.add(cylinder2);
+
+  return group;
+}
+
+function init() {
+
+
+
+  clock = new THREE.Clock();
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+  camera.position.set(0, 200, 0);
+
+  camera3 = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+  camera3.position.set(-25, 30, 0);
+  camera3.lookAt(0, 0, 0);
+
+
+  const mid = new THREE.CylinderGeometry(5, 5, 30, 32);
+  const material = new THREE.MeshPhongMaterial({
+    color: 0x3DFFFF
+  });
+  tower1 = new THREE.Mesh(mid, material);
+  tower1.position.set(30, 15, 40);
+  scene.add(tower1);
+
+  const thin = new THREE.CylinderGeometry(2, 2, 30, 32);
+  tower2 = new THREE.Mesh(thin, material);
+  tower2.position.set(-40, 15, 70);
+  scene.add(tower2);
+
+  const fat = new THREE.CylinderGeometry(8, 8, 30, 32);
+  tower3 = new THREE.Mesh(fat, material);
+  tower3.position.set(10, 15, -50);
+  scene.add(tower3);
+
+
+  var gridXZ = new THREE.GridHelper(200, 20, 'red', 'white');
+  scene.add(gridXZ);
+
+  renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+  // disable OrbitControl keys
+  controls.enableKeys = false;
+
+  document.body.appendChild(renderer.domElement);
+  ////////////////////////////////////////////////////////////////////////
+  power = 5.0;
+  angle = 0.0;
+
+
+  const light = new THREE.PointLight(0xffffff, 1, 0);
+  light.position.set(30, 30, 30);
+  scene.add(light);
+
+  tank = buildVehicle();
+  scene.add(tank)
+  renderer.autoClear = false;
+  fbump = false;
+  bbump = false;
+
+}
+
+function update(dt) {
+
+  keyboard.update();
+
+  if (vel.length() > 0) {
+    angle = 1.5 * Math.PI + Math.atan2(vel.x, vel.z);
+  }
+
+  if (keyboard.pressed("space"))
+    power = 0.1;
+  if (keyboard.pressed("up")) {
+    if (power != 0)
+      power += 1.01;
+    else {
+      if (fbump != true)
+       {power += 5;
+				bbump=false;
+    }
+				
+    }
+  }
+  if (keyboard.pressed("down")) {
+    if (power != 0)
+      power -= 1.1;
+    else {
+      if (bbump != true)
+        {power -= 5;
+				fbump=false;
+    }
+    }
+  }
+  power = Math.clamp(power, -80.0, 80.0);
+
+
+  var angle_thrust = angle;
+  if (keyboard.pressed("left"))
+    angle_thrust += 0.3;
+  if (keyboard.pressed("right"))
+    angle_thrust -= 0.3;
+
+  // compute force
+
+  var thrust = new THREE.Vector3(1, 0, 0).multiplyScalar(Math.abs(power)).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle_thrust);
+
+
+
+
+  force.copy(thrust);
+  force.add(vel.clone().multiplyScalar(-2))
+
+  // eulers
+  vel.add(force.clone().multiplyScalar(dt));
+  if (power == 0)
+    pos.add(vel.clone().multiplyScalar(dt).multiplyScalar(0));
+  else if (power > 0)
+    pos.add(vel.clone().multiplyScalar(dt));
+  else
+    pos.add(vel.clone().multiplyScalar(dt).multiplyScalar(-1));
+
+}
+
+function animate() {
+  //collision check
+  let Rect = makeRect(cube);
+  if (Check_Intersect(Rect, tower1, 5) && power != 0) {
+    if (power > 0)
+      fbump = true;
+    else
+      bbump = true;
+    power = 0;
+  }
+
+  if (Check_Intersect(Rect, tower2, 2) && power != 0) {
+    if (power > 0)
+      fbump = true;
+    else
+      bbump = true;
+    power = 0;
+  }
+  if (Check_Intersect(Rect, tower3, 8) && power != 0) {
+    if (power > 0)
+      fbump = true;
+    else
+      bbump = true;
+    power = 0;
+  }
+  if (!Check_Intersect(Rect, tower1, 5) && !Check_Intersect(Rect, tower2, 2) && !Check_Intersect(Rect, tower3, 8)) {
+    fbump = false;
+    bbump = false;
+  }
+
+
+  var dt = clock.getDelta();
+  update(dt);
+
+  // car update
+  tank.position.copy(pos);
+  tank.rotation.y = angle;
+  camera3.position.copy(tank.valueOf().localToWorld(new THREE.Vector3(-25, 30, 0)));
+  camera3.lookAt(tank.position);
+
+
+
+
+
+  requestAnimationFrame(animate);
+  render();
+}
+
+function makeRect(rect) {
+  let Rect = {};
+  Rect.max = tank.localToWorld(new THREE.Vector3(10, 0, 5));
+  Rect.min = tank.localToWorld(new THREE.Vector3(-10, 0, -5));
+  Rect.px = tank.localToWorld(new THREE.Vector3(1, 0, 0)).sub(tank.position);
+  return Rect;
+}
+
+function Check_Intersect(Rect, C, Rad) {
+  const Rad2 = Rad * Rad;
+
+  let xHat = Rect.px;
+  let zHat = xHat.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
+
+  let R = {
+    max: {
+      x: 0,
+      z: 0
+    },
+    min: {
+      x: 0,
+      z: 0
+    }
+  };
+  let cp = Rect.max.clone().sub(C.position);
+  R.max.x = cp.dot(xHat), R.max.z = cp.dot(zHat);
+
+  cp = Rect.min.clone().sub(C.position);
+  R.min.x = cp.dot(xHat), R.min.z = cp.dot(zHat);
+
+  if (R.max.x < 0) /* R to left of circle center */
+    if (R.max.z < 0) /* R in lower left corner */
+      return ((R.max.x * R.max.x + R.max.z * R.max.z) < Rad2);
+    else if (R.min.z > 0) /* R in upper left corner */
+    return ((R.max.x * R.max.x + R.min.z * R.min.z) < Rad2);
+  else /* R due West of circle */
+    return (Math.abs(R.max.x) < Rad);
+  else if (R.min.x > 0) /* R to right of circle center */
+    if (R.max.z < 0) /* R in lower right corner */
+      return ((R.min.x * R.min.x + R.max.z * R.max.z) < Rad2);
+    else if (R.min.z > 0) /* R in upper right corner */
+    return ((R.min.x * R.min.x + R.min.z * R.min.z) < Rad2);
+  else /* R due East of circle */
+    return (R.min.x < Rad);
+  else /* R on circle vertical centerline */
+    if (R.max.z < 0) /* R due South of circle */
+      return (Math.abs(R.max.z) < Rad);
+    else if (R.min.z > 0) /* R due North of circle */
+    return (R.min.z < Rad);
+  else /* R contains circle centerpoint */
+    return (true);
+}
+
+
+
+function render() {
+  var WW = window.innerWidth;
+  var HH = window.innerHeight;
+
+  renderer.clear();
+
+  renderer.setViewport(0, 0, WW / 2, HH);
+  camera.aspect = WW / 2 / HH;
+  camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+
+  renderer.setViewport(WW / 2, 0, WW / 2, HH);
+  renderer.render(scene, camera3);
+
+}
+
+
+</script>
+</body>
+
+</html>
